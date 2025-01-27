@@ -31,6 +31,7 @@ module.exports = {
     'prettier/prettier': 'error',
     'no-console': ['error', { allow: ['warn', 'error'] }],
     'react/react-in-jsx-scope': 'off',
+    'react/no-unknown-property': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     'import/newline-after-import': ['error', { count: 1 }],
     'eslint-disable react/display-name': 'off',

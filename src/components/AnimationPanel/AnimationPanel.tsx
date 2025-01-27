@@ -1,5 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 
+// @ts-expect-error react-three/fiber should fix in future
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -36,9 +37,9 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
       positions[i * 3 + 1] = getRandomNumber(); // y-coordinate
       positions[i * 3 + 2] = getRandomNumber(); // z-coordinate
 
-      targets[i * 3 + 0] = getRandomNumber(); // Initial random target x-coordinate
-      targets[i * 3 + 1] = getRandomNumber(); // Initial random target y-coordinate
-      targets[i * 3 + 2] = getRandomNumber(); // Initial random target z-coordinate
+      targets[i * 3 + 0] = getRandomNumber(); // x-coordinate
+      targets[i * 3 + 1] = getRandomNumber(); // y-coordinate
+      targets[i * 3 + 2] = getRandomNumber(); // z-coordinate
     }
 
     return { positions, targets };
@@ -133,15 +134,20 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
 
   return (
     <>
+      {/** @ts-expect-error react-three/fiber should fix in future version */}
       <points ref={pointsRef}>
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
         <bufferGeometry>
+          {/** @ts-expect-error react-three/fiber should fix in future version */}
           <bufferAttribute
             attach="attributes-position"
             count={positions.length / 3}
             itemSize={3}
             array={positions}
           />
+          {/** @ts-expect-error react-three/fiber should fix in future version */}
         </bufferGeometry>
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
         <pointsMaterial
           map={texture}
           size={0.2}
@@ -149,10 +155,15 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
           transparent
           alphaTest={0.5}
         />
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
       </points>
+      {/** @ts-expect-error react-three/fiber should fix in future version */}
       <lineSegments ref={linesRef}>
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
         <bufferGeometry />
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
         <lineBasicMaterial vertexColors />
+        {/** @ts-expect-error react-three/fiber should fix in future version */}
       </lineSegments>
     </>
   );

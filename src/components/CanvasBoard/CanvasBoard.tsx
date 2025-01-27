@@ -1,3 +1,4 @@
+// @ts-expect-error react-three/fiber should fix in future
 import { Canvas } from '@react-three/fiber';
 
 import AnimationPanel from '../AnimationPanel';
