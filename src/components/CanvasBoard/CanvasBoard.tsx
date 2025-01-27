@@ -11,7 +11,7 @@ const CanvasBoard: React.FC = () => {
         height: '100vh',
       }}
     >
-      <AnimationPanel dotsNumber={100} />
+      <AnimationPanel dotsNumber={200} />
     </Canvas>
   );
 };

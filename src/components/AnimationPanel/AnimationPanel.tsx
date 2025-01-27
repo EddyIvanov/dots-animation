@@ -1,49 +1,85 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 
 // @ts-expect-error react-three/fiber should fix in future
 import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import {
+  CanvasTexture,
+  Points,
+  LineSegments,
+  Float32BufferAttribute,
+} from 'three';
 
 import {
+  BOUNDARY,
   DEFAULT_DOTS_NUMBER,
   DOT_SIZE,
   DOTS_COLOR,
-  DOTS_DISTANCE,
-  TRANSITION_SPEED,
+  LINE_UPDATE_INTERVAL,
 } from './constants';
 import { AnimationBoardProps } from './types';
-import { getRandomNumber } from '../../helpers';
 import {
-  getDistanceBetweenPoints,
-  getOpacityFromDistance,
-  getScreenPosition,
+  getLinePositionsAndColors,
+  getRandomVelocitySpeed,
+  normalizeVelocity,
 } from './utils/';
+import { getRandomNumber } from '../../helpers';
 
 const AnimationPanel: React.FC<AnimationBoardProps> = ({
   dotsNumber = DEFAULT_DOTS_NUMBER,
   dotsColor = DOTS_COLOR,
-  transitionSpeed = TRANSITION_SPEED,
 }) => {
-  const pointsRef = useRef<THREE.Points | null>(null);
-  const linesRef = useRef<THREE.LineSegments | null>(null);
+  const pointsRef = useRef<Points | null>(null);
+  const linesRef = useRef<LineSegments | null>(null);
+  const frameCount = useRef(0); // Keep track of frame count for performance optimization
+
+  // Generate random positions within a larger space
+  const getRandomPosition = useCallback(
+    () => ({
+      x: (Math.random() - 0.5) * 10,
+      y: (Math.random() - 0.5) * 10,
+      z: (Math.random() - 0.5) * 10,
+    }),
+    []
+  );
 
   // Generate random dots with initial positions and targets
   const { positions, targets } = useMemo(() => {
-    const positions = new Float32Array(dotsNumber * 3); // Initial positions
-    const targets = new Float32Array(dotsNumber * 3); // Target positions
+    const positions = new Float32Array(dotsNumber * 3);
+    const targets = new Float32Array(dotsNumber * 3);
 
     for (let i = 0; i < dotsNumber; i++) {
-      positions[i * 3 + 0] = getRandomNumber(); // x-coordinate
-      positions[i * 3 + 1] = getRandomNumber(); // y-coordinate
-      positions[i * 3 + 2] = getRandomNumber(); // z-coordinate
+      const pos = getRandomPosition();
+      const target = getRandomPosition();
 
-      targets[i * 3 + 0] = getRandomNumber(); // x-coordinate
-      targets[i * 3 + 1] = getRandomNumber(); // y-coordinate
-      targets[i * 3 + 2] = getRandomNumber(); // z-coordinate
+      positions[i * 3] = pos.x;
+      positions[i * 3 + 1] = pos.y;
+      positions[i * 3 + 2] = pos.z;
+
+      targets[i * 3] = target.x;
+      targets[i * 3 + 1] = target.y;
+      targets[i * 3 + 2] = target.z;
     }
 
     return { positions, targets };
-  }, [dotsNumber]);
+  }, [dotsNumber, getRandomPosition]);
+
+  // Store velocities in a ref to prevent unnecessary rerenders
+  const velocitiesRef = useRef(new Float32Array(dotsNumber * 3));
+
+  // Initialize velocities
+  useMemo(() => {
+    for (let i = 0; i < dotsNumber; i++) {
+      const dx = targets[i * 3] - positions[i * 3];
+      const dy = targets[i * 3 + 1] - positions[i * 3 + 1];
+      const dz = targets[i * 3 + 2] - positions[i * 3 + 2];
+
+      const velocitySpeed = getRandomVelocitySpeed();
+      const { vx, vy, vz } = normalizeVelocity(dx, dy, dz, velocitySpeed);
+      velocitiesRef.current[i * 3] = vx;
+      velocitiesRef.current[i * 3 + 1] = vy;
+      velocitiesRef.current[i * 3 + 2] = vz;
+    }
+  }, [dotsNumber, positions, targets]);
 
   // Create a circular texture for the points, by default is square
   const texture = useMemo(() => {
@@ -54,82 +90,87 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
 
     const context = canvas.getContext('2d');
     if (context) {
+      context.clearRect(0, 0, size, size);
       context.beginPath();
       context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
       context.fillStyle = dotsColor;
       context.fill();
     }
 
-    return new THREE.CanvasTexture(canvas);
+    const texture = new CanvasTexture(canvas);
+    texture.premultiplyAlpha = true; // This helps with transparency issues
+    return texture;
   }, []);
 
   useFrame(({ camera, gl }) => {
-    if (pointsRef.current && linesRef.current) {
-      const positionsArray = pointsRef.current.geometry.attributes.position
-        .array as Float32Array;
-      const linePositions: number[] = [];
-      const colors: number[] = [];
+    if (!pointsRef.current || !linesRef.current) return;
 
-      for (let i = 0; i < dotsNumber; i++) {
-        for (let j = 0; j < 3; j++) {
-          const currentIndex = i * 3 + j;
+    frameCount.current += 1;
+    const positionsArray = pointsRef.current.geometry.attributes.position
+      .array as Float32Array;
 
-          // Smoothly interpolate current position toward the target
-          positionsArray[currentIndex] +=
-            (targets[currentIndex] - positionsArray[currentIndex]) *
-            transitionSpeed;
+    // Update positions with consistent velocity
+    for (let i = 0; i < dotsNumber; i++) {
+      for (let j = 0; j < 3; j++) {
+        const currentIndex = i * 3 + j;
+        positionsArray[currentIndex] += velocitiesRef.current[currentIndex];
 
-          // If the target is nearly reached, set a new random target
-          if (
-            Math.abs(targets[currentIndex] - positionsArray[currentIndex]) < 0.3
-          ) {
-            targets[currentIndex] = TRANSITION_SPEED;
-          }
-        }
-      }
-
-      // Compute lines between points within 100px screen-space radius
-      for (let i = 0; i < dotsNumber; i++) {
-        const pos1 = new THREE.Vector3(
-          positionsArray[i * 3 + 0],
-          positionsArray[i * 3 + 1],
-          positionsArray[i * 3 + 2]
+        // Check if target is reached
+        const distanceToTarget = Math.abs(
+          targets[currentIndex] - positionsArray[currentIndex]
         );
-        const screenPos1 = getScreenPosition(pos1, camera, gl.domElement);
+        if (distanceToTarget < 0.1) {
+          // Set new target
+          const newTarget = getRandomNumber();
+          targets[currentIndex] = newTarget;
 
-        for (let j = i + 1; j < dotsNumber; j++) {
-          const pos2 = new THREE.Vector3(
-            positionsArray[j * 3 + 0],
-            positionsArray[j * 3 + 1],
-            positionsArray[j * 3 + 2]
-          );
-          const screenPos2 = getScreenPosition(pos2, camera, gl.domElement);
+          // Calculate new velocity with consistent speed
+          const dx = targets[i * 3] - positionsArray[i * 3];
+          const dy = targets[i * 3 + 1] - positionsArray[i * 3 + 1];
+          const dz = targets[i * 3 + 2] - positionsArray[i * 3 + 2];
+          const velocitySpeed = getRandomVelocitySpeed();
+          const { vx, vy, vz } = normalizeVelocity(dx, dy, dz, velocitySpeed);
 
-          // Check if the two points are within the 100px screen radius
-          const distance = getDistanceBetweenPoints(screenPos1, screenPos2);
-          if (distance < DOTS_DISTANCE) {
-            linePositions.push(pos1.x, pos1.y, pos1.z, pos2.x, pos2.y, pos2.z);
-            const alpha = getOpacityFromDistance(distance);
-            colors.push(alpha, alpha, alpha, alpha, alpha, alpha);
-          }
+          velocitiesRef.current[i * 3] = vx;
+          velocitiesRef.current[i * 3 + 1] = vy;
+          velocitiesRef.current[i * 3 + 2] = vz;
+        }
+
+        // Boundary check with smooth reversal
+        if (Math.abs(positionsArray[currentIndex]) > BOUNDARY) {
+          velocitiesRef.current[currentIndex] *= -0.8;
+          positionsArray[currentIndex] =
+            Math.sign(positionsArray[currentIndex]) * BOUNDARY;
         }
       }
-
-      // Update positions and colors of the lines
-      const lineGeometry = linesRef.current.geometry as THREE.BufferGeometry;
-      lineGeometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(linePositions, 3)
-      );
-      lineGeometry.setAttribute(
-        'color',
-        new THREE.Float32BufferAttribute(colors, 3)
-      );
-      lineGeometry.attributes.position.needsUpdate = true;
-      lineGeometry.attributes.color.needsUpdate = true;
-
-      pointsRef.current.geometry.attributes.position.needsUpdate = true;
     }
+
+    // Update lines
+    if (frameCount.current % LINE_UPDATE_INTERVAL === 0) {
+      const { positions: linePositions, colors } = getLinePositionsAndColors({
+        camera,
+        gl,
+        positionsArray,
+        dotsNumber,
+      });
+
+      // Update line geometry
+      const lineGeometry = linesRef.current.geometry;
+      if (linePositions.length > 0) {
+        lineGeometry.setAttribute(
+          'position',
+          new Float32BufferAttribute(linePositions, 3)
+        );
+        lineGeometry.setAttribute(
+          'color',
+          new Float32BufferAttribute(colors, 3)
+        );
+        lineGeometry.attributes.position.needsUpdate = true;
+        lineGeometry.attributes.color.needsUpdate = true;
+      }
+    }
+
+    pointsRef.current.geometry.attributes.position.needsUpdate = true;
   });
 
   return (
@@ -153,7 +194,7 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
           size={0.2}
           sizeAttenuation
           transparent
-          alphaTest={0.5}
+          depthWrite={false}
         />
         {/** @ts-expect-error react-three/fiber should fix in future version */}
       </points>
@@ -162,7 +203,7 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
         {/** @ts-expect-error react-three/fiber should fix in future version */}
         <bufferGeometry />
         {/** @ts-expect-error react-three/fiber should fix in future version */}
-        <lineBasicMaterial vertexColors />
+        <lineBasicMaterial vertexColors depthWrite={false} />
         {/** @ts-expect-error react-three/fiber should fix in future version */}
       </lineSegments>
     </>

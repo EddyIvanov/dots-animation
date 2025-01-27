@@ -1,7 +1,7 @@
 import Head from 'next/head';
 
 import CanvasBoard from '../components/CanvasBoard';
-import styles from '../styles/Home.module.css';
+import styles from '../styles/Generic.module.css';
 
 const Home: React.FC = () => {
   return (
