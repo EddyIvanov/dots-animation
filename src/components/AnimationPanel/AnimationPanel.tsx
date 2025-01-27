@@ -191,7 +191,7 @@ const AnimationPanel: React.FC<AnimationBoardProps> = ({
         {/** @ts-expect-error react-three/fiber should fix in future version */}
         <pointsMaterial
           map={texture}
-          size={0.2}
+          size={0.15}
           sizeAttenuation
           transparent
           depthWrite={false}

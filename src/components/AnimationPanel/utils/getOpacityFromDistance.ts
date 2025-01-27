@@ -5,12 +5,12 @@
  */
 export const getOpacityFromDistance = (distance: number): number => {
   const maxDistance = 100;
-  const threshold = 50; // Threshold for transition
+  const threshold = 60; // Threshold for transition
 
   // more aggressive black line
   if (distance <= threshold) {
     return 0;
   }
 
-  return distance / maxDistance / 1.1;
+  return distance / maxDistance / 1.2;
 };
